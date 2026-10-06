@@ -21,6 +21,8 @@ async function push(U, { title, body, tag, alarm, ttl }) {
     data: { title, body, tag: tag || 'buildspace', url: './', alarm: alarm ? '1' : '0' },
     webpush: { headers: { Urgency: 'high', TTL: String(ttl || 3600) } },
   });
+  console.log(`push "${title}" -> ${res.successCount} ok, ${res.failureCount} failed`);
+  res.responses.forEach(r => { if (!r.success) console.error('  send error:', r.error && r.error.code, '-', r.error && r.error.message); });
   await Promise.all(res.responses.map((r, i) => {
     const c = r.error && r.error.code;
     return !r.success && (c === 'messaging/registration-token-not-registered' || c === 'messaging/invalid-registration-token') ? U.devs[i].ref.delete() : null;
@@ -142,6 +144,11 @@ async function main() {
     if (!users.has(uid)) users.set(uid, { uid, devs: [], pn: new Map() });
     users.get(uid).devs.push({ token: t, ref: d.ref });
   });
+  console.log('devices found:', snap.size, '| users:', users.size);
+  if (process.env.TEST === 'true') {
+    for (const U of users.values()) await push(U, { title: '✅ BuildSpace test', body: 'Background notifications are working.', tag: 'test' });
+    console.log('test sent'); return;
+  }
   for (const U of users.values()) {
     try {
       const sref = db.doc(`users/${U.uid}/meta/notify`), st = (await sref.get()).data() || {}, upd = { lastTs: now };
