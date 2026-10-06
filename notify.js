@@ -3,6 +3,9 @@ const admin = require('firebase-admin');
 admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) });
 const db = admin.firestore(), { FieldValue } = admin.firestore, msg = admin.messaging();
 
+let where = 'start';
+const mark = m => { where = m; console.log(new Date().toISOString().slice(11, 19), m); };
+setTimeout(() => { console.error('TIMEOUT while:', where); process.exit(2); }, 90000);
 const IST = 5.5 * 36e5, istStr = ms => new Date(ms + IST).toISOString().slice(0, 16);
 const t12 = at => { const [h, m] = at.slice(11, 16).split(':').map(Number); return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
 const inr = n => '₹' + Math.round(n).toLocaleString('en-IN');
@@ -137,6 +140,7 @@ async function instant(U, st, now) {
 
 async function main() {
   const now = Date.now(), ist = istStr(now), today = ist.slice(0, 10), mod = +ist.slice(11, 13) * 60 + +ist.slice(14, 16);
+  mark('reading devices');
   const snap = await db.collectionGroup('devices').get(), users = new Map();
   snap.docs.forEach(d => {
     const uid = d.ref.parent.parent.id, t = d.data().token;
@@ -151,16 +155,22 @@ async function main() {
   }
   for (const U of users.values()) {
     try {
+      mark('user ' + U.uid + ': state');
       const sref = db.doc(`users/${U.uid}/meta/notify`), st = (await sref.get()).data() || {}, upd = { lastTs: now };
+      mark('instant');
       if (st.lastTs) await instant(U, st, now);
+      mark('reminders');
       await reminders(U, now);
+      mark('slots');
       for (const [k, start] of SLOTS) {
         if (mod >= start && mod < start + SLOT_WINDOW && st[k] !== today) {
           upd[k] = today;
+          mark('slot ' + k);
           if (k === 'digest') await digest(U, now);
           else await tomorrow(U, now, k === 't18' ? '🌇 Tomorrow’s schedule' : '🌙 Tomorrow — final check');
         }
       }
+      mark('saving state');
       await sref.set(upd, { merge: true });
     } catch (e) { console.error('user', U.uid, e.message || e); }
   }
