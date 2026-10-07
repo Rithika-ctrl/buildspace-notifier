@@ -58,7 +58,7 @@ async function reminders(U, now) {
     const pn = await pname(U, e.pid), what = e.title || (type === 'task' ? 'Task' : 'Upcoming event');
     const sub = `${type === 'task' ? 'Task due' : e.kind || 'Event'} at ${t12(at)}${pn ? ' · ' + pn : ''}`, tag = 'evt-' + d.id;
     const mins = Math.max(1, Math.round(left));
-    if (stage === 10) await push(U, { title: `🚨 ALARM · ${what} in ${mins} min`, body: sub, tag, alarm: true, ttl: 600 });
+    if (stage === 10) await push(U, { title: `🚨 ALARM · ${what} in ${mins} min`, body: sub, tag: 'alm-' + d.id, alarm: true, ttl: 600 }); // own tag: never replaces the earlier reminder
     else await push(U, { title: `⏰ ${what} in ${left >= 150 ? '3 hours' : left >= 55 ? '1 hour' : mins + ' min'}`, body: sub, tag });
     await d.ref.update({ rem: { at, s: STAGES.filter(s => s >= stage) } });
   }
@@ -103,7 +103,8 @@ async function tomorrow(U, now, title) {
   const nDue = tk.docs.filter(d => d.data().type === 'task' && d.data().status !== 'Completed').length, deliv = [];
   for (const d of mats.docs) if (d.data().date === tm) { const pn = await pname(U, d.data().pid); deliv.push((d.data().name || 'Material') + (pn ? ` (${pn})` : '')); }
   const lines = [evs.length && `📍 ${list(evs)}`, deliv.length && `🚚 Delivery: ${list(deliv)}`, nDue && `✅ ${plural(nDue, 'task')} due`].filter(Boolean);
-  if (lines.length) await push(U, { title, body: lines.join('\n'), tag: 'tomorrow' });
+  console.log(`${title}: ${evs.length} visit(s), ${deliv.length} delivery(ies), ${nDue} task(s) for ${tm}`);
+  await push(U, { title, body: lines.length ? lines.join('\n') : 'Nothing planned for tomorrow yet.', tag: 'tomorrow' }); // always sent, so you know it ran
 }
 
 // ----- budget 80% / 100% (once per step; re-arms if spend drops) -----
@@ -152,6 +153,10 @@ async function main() {
   if (process.env.TEST === 'true') {
     for (const U of users.values()) await push(U, { title: '✅ BuildSpace test', body: 'Background notifications are working.', tag: 'test' });
     console.log('test sent'); return;
+  }
+  if (process.env.PREVIEW === 'true') {
+    for (const U of users.values()) await tomorrow(U, now, '🌇 Tomorrow’s schedule (test)');
+    console.log('preview sent'); return;
   }
   for (const U of users.values()) {
     try {

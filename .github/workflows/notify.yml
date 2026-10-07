@@ -8,6 +8,10 @@ on:
         description: 'Send a test notification now'
         type: boolean
         default: false
+      preview:
+        description: 'Send tomorrow preview now'
+        type: boolean
+        default: false
 concurrency:
   group: notify
   cancel-in-progress: false
@@ -25,3 +29,4 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           TEST: ${{ inputs.test }}
+          PREVIEW: ${{ inputs.preview }}
